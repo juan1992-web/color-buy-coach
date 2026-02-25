@@ -15,7 +15,8 @@ import {
   Loader2,
   Info,
   Download,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Copy
 } from 'lucide-react';
 import { cn } from './lib/utils';
 
@@ -52,6 +53,9 @@ function App() {
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const resultCardRef = useRef<HTMLDivElement>(null);
+
+  // 카카오 JavaScript 키 (환경변수 또는 직접 입력)
+  const KAKAO_KEY = import.meta.env.VITE_KAKAO_JS_KEY || ""; 
 
   const products: Product[] = [
     { 
@@ -91,15 +95,20 @@ function App() {
       setSession(session);
     });
 
-    // Kakao SDK 초기화 (이미 등록된 경우 제외)
-    if (window.Kakao && !window.Kakao.isInitialized()) {
-      // 실제 앱 등록 후 발급받은 JavaScript 키가 필요합니다. 
-      // 키가 없어도 기본 공유는 URL 방식으로 가능하도록 구현합니다.
-      // window.Kakao.init('YOUR_JAVASCRIPT_KEY'); 
+    // Kakao SDK 초기화 로직 보완
+    if (window.Kakao) {
+      if (!window.Kakao.isInitialized() && KAKAO_KEY) {
+        try {
+          window.Kakao.init(KAKAO_KEY);
+          console.log('Kakao SDK Initialized');
+        } catch (e) {
+          console.error('Kakao Init Error:', e);
+        }
+      }
     }
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [KAKAO_KEY]);
 
   const handleAnalyze = async () => {
     if (!selectedFile) return;
@@ -154,18 +163,18 @@ function App() {
   };
 
   const handleKakaoShare = () => {
-    const shareUrl = window.location.href;
+    const shareUrl = window.location.origin; // 공유될 주소
     const title = `나의 퍼스널 컬러는 [${tone}]!`;
-    const description = "컬러코치에서 나만의 인생 컬러와 찰떡 아이템을 확인해보세요.";
+    const description = "컬러코치에서 나만의 인생 컬러와 아이템을 확인해보세요.";
 
-    // Kakao SDK가 초기화되어 있고 키가 설정된 경우
+    // 1. Kakao SDK가 정상적으로 초기화된 경우
     if (window.Kakao && window.Kakao.isInitialized()) {
-      window.Kakao.Link.sendDefault({
+      window.Kakao.Share.sendDefault({
         objectType: 'feed',
         content: {
           title: title,
           description: description,
-          imageUrl: 'https://cdn.pixabay.com/photo/2016/03/23/04/01/woman-1274056_1280.jpg', // 샘플 이미지
+          imageUrl: 'https://cdn.pixabay.com/photo/2016/03/23/04/01/woman-1274056_1280.jpg',
           link: {
             mobileWebUrl: shareUrl,
             webUrl: shareUrl,
@@ -173,7 +182,7 @@ function App() {
         },
         buttons: [
           {
-            title: '나도 검사하기',
+            title: '나도 테스트하기',
             link: {
               mobileWebUrl: shareUrl,
               webUrl: shareUrl,
@@ -181,10 +190,17 @@ function App() {
           },
         ],
       });
-    } else {
-      // SDK 미초기화 시 커스텀 URL 스킴 사용 (기본 공유)
-      const kakaoUrl = `https://sharer.kakao.com/talk/friends/picker/link?url=${encodeURIComponent(shareUrl)}&title=${encodeURIComponent(title + "\n" + description)}`;
-      window.open(kakaoUrl, '_blank');
+    } 
+    // 2. 키가 없거나 SDK 초기화 실패 시 (에러 4011 방지)
+    else {
+      const fallbackMsg = `${title}\n${description}\n${shareUrl}`;
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(fallbackMsg).then(() => {
+          alert("카카오 앱 키가 설정되지 않아 결과 링크를 복사했습니다. 친구에게 전달해보세요!");
+        });
+      } else {
+        alert("분석 결과: " + title + "\n링크를 복사해서 공유해주세요!");
+      }
     }
   };
 
@@ -476,8 +492,8 @@ function App() {
                   onClick={handleKakaoShare} 
                   className="w-full bg-[#FEE500] text-[#191919] py-6 rounded-[2.5rem] font-bold text-xl shadow-xl shadow-yellow-500/10 flex items-center justify-center gap-3 hover:bg-[#FADA0A] active:scale-[0.98] transition-all"
                 >
-                  <MessageCircle className="w-6 h-6 fill-current" />
-                  카카오톡으로 결과 공유
+                  {window.Kakao && window.Kakao.isInitialized() ? <MessageCircle className="w-6 h-6 fill-current" /> : <Copy className="w-6 h-6" />}
+                  {window.Kakao && window.Kakao.isInitialized() ? "카카오톡으로 결과 공유" : "결과 링크 복사하기"}
                 </button>
                 
                 <button 
