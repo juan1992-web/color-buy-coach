@@ -203,7 +203,7 @@ function App() {
     
     setIsLoginLoading(true);
     const { error } = await supabase.auth.signInWithOtp({ 
-      email,
+      email: email,
       options: {
         emailRedirectTo: window.location.origin, // 현재 주소로 다시 돌아오게 설정
       }
@@ -211,10 +211,10 @@ function App() {
     
     setIsLoginLoading(false);
     if (error) {
+      console.error(error); // 구체적 에러 확인용
       alert('로그인 오류: ' + error.message);
     } else {
-      alert('이메일로 로그인 링크를 보냈습니다! 메일함을 확인해주세요.');
-      // 로그인 완료(세션 생성) 후에 결과를 수동으로 한 번 더 저장할 수 있는 로직 등 추가 가능
+      alert('이메일함에서 로그인 링크를 확인해주세요! (스팸함도 확인)');
     }
   };
 
