@@ -196,7 +196,7 @@ function App() {
       const fallbackMsg = `${title}\n${description}\n${shareUrl}`;
       if (navigator.clipboard) {
         navigator.clipboard.writeText(fallbackMsg).then(() => {
-          alert("카카오 앱 키가 설정되지 않아 결과 링크를 복사했습니다. 친구에게 전달해보세요!");
+          alert("결과 링크를 복사했습니다. 친구에게 전달해보세요!");
         });
       } else {
         alert("분석 결과: " + title + "\n링크를 복사해서 공유해주세요!");
