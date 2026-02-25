@@ -6,9 +6,17 @@ export default {
   ],
   theme: {
     extend: {
+      colors: {
+        beauty: {
+          pink: '#FF6B9D',
+          purple: '#8B5CF6',
+          red: '#EF4444',
+          blue: '#3B82F6',
+          light: '#FFF5F7',
+        }
+      },
       fontFamily: {
-        sans: ['Inter', 'sans-serif'],
-        serif: ['Playfair Display', 'serif'],
+        sans: ['Noto Sans KR', 'Inter', 'sans-serif'],
       },
       animation: {
         'fade-in-up': 'fadeInUp 0.8s ease-out forwards',

@@ -1,48 +1,42 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,700;1,700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;700&family=Playfair+Display:wght@700&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --background: #faf9f6;
-  --foreground: #1a1a1a;
-  --primary: #d4a373;
-  --accent: #e29578;
+  --background: #ffffff;
+  --pink-main: #FF6B9D;
+  --pink-light: #FFF5F7;
+  --purple-main: #8B5CF6;
+  --purple-soft: #F5F3FF;
+  --trust-blue: #3B82F6;
+  --accent-red: #EF4444;
+  --text-main: #1F2937;
 }
 
 body {
-  font-family: 'Inter', sans-serif;
+  font-family: 'Noto Sans KR', 'Inter', sans-serif;
   background-color: var(--background);
-  color: var(--foreground);
+  color: var(--text-main);
   -webkit-font-smoothing: antialiased;
 }
 
 h1, h2, h3 {
-  font-family: 'Playfair Display', serif;
+  font-family: 'Noto Sans KR', sans-serif;
+  letter-spacing: -0.02em;
 }
 
 .shadow-premium {
-  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 2px 10px -2px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 10px 30px -5px rgba(255, 107, 157, 0.1), 0 4px 10px -5px rgba(139, 92, 246, 0.1);
 }
 
-.shadow-soft {
-  box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.05);
+.bg-gradient-beauty {
+  background: linear-gradient(135deg, #FF6B9D 0%, #8B5CF6 100%);
 }
 
-@layer utilities {
-  .animate-fade-in-up {
-    animation: fadeInUp 0.5s ease-out forwards;
-  }
-}
-
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.text-gradient-beauty {
+  background: linear-gradient(135deg, #FF6B9D 0%, #8B5CF6 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
