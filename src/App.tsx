@@ -3,11 +3,11 @@ import type { ChangeEvent } from 'react';
 import './App.css';
 
 type Step = 'landing' | 'upload' | 'analyzing' | 'result';
-type Tone = 'warm' | 'cool';
+type Tone = 'warm' | 'cool' | 'Spring' | 'Summer' | 'Autumn' | 'Winter';
 
 interface Product {
   id: number;
-  tone: Tone;
+  tone: Tone | string;
   name: string;
   brand: string;
   price: string;
@@ -15,9 +15,13 @@ interface Product {
   image: string;
 }
 
-// 1. 가짜 상품 데이터 (Mock Data)
+interface AIResult {
+  tone: Tone | string;
+  reason: string;
+  bestColors: string[];
+}
+
 const products: Product[] = [
-  // 웜톤 제품
   {
     id: 1,
     tone: 'warm',
@@ -45,7 +49,6 @@ const products: Product[] = [
     reason: '가을 웜톤의 인생템, 브릭 레드',
     image: 'https://images.unsplash.com/photo-1586495777744-4413f21062fa?auto=format&fit=crop&q=80&w=200&h=200'
   },
-  // 쿨톤 제품
   {
     id: 4,
     tone: 'cool',
@@ -81,8 +84,7 @@ function App() {
   const [accessory, setAccessory] = useState('');
   const [budget, setBudget] = useState('');
   
-  // 결과 상태
-  const [userTone, setUserTone] = useState<Tone | null>(null);
+  const [aiResult, setAiResult] = useState<AIResult | null>(null);
   const [recommendedProducts, setRecommendedProducts] = useState<Product[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -98,24 +100,46 @@ function App() {
       reader.onloadend = () => {
         setImagePreview(reader.result as string);
       };
-      reader.readAsDataURL(file);
+      reader.readAsDataURL(file); // Convert image to Base64
     }
   };
 
-  const handleAnalyze = () => {
+  const handleAnalyze = async () => {
     setStep('analyzing');
     
-    // 2. 추천 로직 (Mock)
-    setTimeout(() => {
-      let tone: Tone = 'cool'; // 기본값 (실버/모름)
-      if (accessory === '골드') {
-        tone = 'warm';
+    try {
+      // 1. Cloudflare Pages Function으로 POST 요청
+      const response = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          image: imagePreview,
+          preferences: { accessory, budget }
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Analysis failed');
       }
+
+      const result: AIResult = await response.json();
+      setAiResult(result);
+
+      // 2. 결과에 따른 제품 추천 로직 (간단한 매핑)
+      const toneLower = result.tone.toLowerCase();
+      const isWarm = toneLower.includes('spring') || toneLower.includes('autumn') || toneLower.includes('warm');
+      const mappedTone: Tone = isWarm ? 'warm' : 'cool';
       
-      setUserTone(tone);
-      setRecommendedProducts(products.filter(p => p.tone === tone));
+      setRecommendedProducts(products.filter(p => p.tone === mappedTone));
       setStep('result');
-    }, 3000);
+
+    } catch (error) {
+      console.error(error);
+      alert('AI 분석 중 오류가 발생했습니다. 다시 시도해주세요.');
+      setStep('upload');
+    }
   };
 
   const handleReset = () => {
@@ -123,7 +147,7 @@ function App() {
     setImagePreview(null);
     setAccessory('');
     setBudget('');
-    setUserTone(null);
+    setAiResult(null);
     setRecommendedProducts([]);
   };
 
@@ -289,24 +313,31 @@ function App() {
             <span className="text-4xl relative z-10 animate-bounce">✨</span>
           </div>
           <div className="text-center space-y-2">
-            <h2 className="text-2xl font-extrabold text-gray-800 animate-pulse">피부 톤 분석 중...</h2>
+            <h2 className="text-2xl font-extrabold text-gray-800 animate-pulse">AI가 퍼스널컬러를 분석 중입니다...</h2>
             <p className="text-sm text-gray-600 font-medium">수만 개의 컬러 데이터와 비교하고 있어요</p>
           </div>
         </div>
       )}
 
       {/* 4. 결과 화면 (Result) */}
-      {step === 'result' && (
+      {step === 'result' && aiResult && (
         <div className="w-full max-w-md flex flex-col gap-6 animate-fade-in-up pb-8">
           
           {/* 분석 완료 헤더 */}
           <div className="text-center space-y-2 pt-4">
             <div className="inline-block bg-white/80 px-4 py-1.5 rounded-full shadow-sm border border-pink-100 mb-2">
               <span className="text-sm font-bold text-gray-700">
-                분석 완료! 고객님은 <span className="text-pink-500">{userTone === 'warm' ? '가을 웜톤' : '여름 쿨톤'}</span> 입니다.
+                분석 완료! 고객님은 <span className="text-pink-500">{aiResult.tone}</span> 입니다.
               </span>
             </div>
-            <h2 className="text-3xl font-extrabold text-gray-900">
+            
+            <div className="bg-white/60 p-4 rounded-xl shadow-sm border border-pink-100 mt-2 text-left">
+              <p className="text-sm text-gray-700 leading-relaxed font-medium">
+                <span className="text-pink-400 mr-1">🤖</span> {aiResult.reason}
+              </p>
+            </div>
+
+            <h2 className="text-3xl font-extrabold text-gray-900 mt-4">
               오늘의 쇼핑 리스트<br/>
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-pink-500 to-rose-400">Top 3</span>
             </h2>
@@ -317,21 +348,17 @@ function App() {
             {recommendedProducts.map((product, index) => (
               <div key={product.id} className="bg-white/80 backdrop-blur-md rounded-2xl p-4 shadow-sm border border-pink-100/50 flex gap-4 items-center relative overflow-hidden group hover:shadow-md transition-shadow">
                 
-                {/* 랭킹 뱃지 */}
                 <div className="absolute top-0 left-0 bg-gradient-to-br from-pink-400 to-rose-500 text-white w-8 h-8 flex items-center justify-center font-bold text-sm rounded-br-xl z-10">
                   {index + 1}
                 </div>
 
-                {/* 상품 이미지 */}
                 <img src={product.image} alt={product.name} className="w-24 h-24 object-cover rounded-xl shadow-inner border border-gray-100" />
                 
-                {/* 상품 정보 */}
                 <div className="flex flex-col flex-1">
                   <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">{product.brand}</span>
                   <h3 className="text-lg font-extrabold text-gray-900 leading-tight mb-1">{product.name}</h3>
                   <p className="text-sm font-medium text-pink-600 mb-2">{product.price}</p>
                   
-                  {/* 추천 이유 (강조) */}
                   <div className="bg-pink-50 rounded-lg p-2 border border-pink-100">
                     <p className="text-xs font-bold text-gray-700 flex items-start gap-1">
                       <span className="text-pink-400 mt-0.5">💡</span>
