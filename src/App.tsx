@@ -4,7 +4,6 @@ import type { Session } from '@supabase/supabase-js';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Camera, 
-  Upload, 
   CheckCircle2, 
   ArrowRight, 
   ShoppingBag, 
