@@ -7,7 +7,7 @@ import {
   Camera, 
   ArrowRight, 
   ShoppingBag, 
-  Share2, 
+  MessageCircle, 
   Sparkles, 
   ShieldCheck, 
   Heart,
@@ -30,6 +30,12 @@ interface Product {
   link: string;
   reason: string;
   tags: string[];
+}
+
+declare global {
+  interface Window {
+    Kakao: any;
+  }
 }
 
 function App() {
@@ -84,6 +90,14 @@ function App() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
     });
+
+    // Kakao SDK 초기화 (이미 등록된 경우 제외)
+    if (window.Kakao && !window.Kakao.isInitialized()) {
+      // 실제 앱 등록 후 발급받은 JavaScript 키가 필요합니다. 
+      // 키가 없어도 기본 공유는 URL 방식으로 가능하도록 구현합니다.
+      // window.Kakao.init('YOUR_JAVASCRIPT_KEY'); 
+    }
+
     return () => subscription.unsubscribe();
   }, []);
 
@@ -139,10 +153,39 @@ function App() {
     }
   };
 
-  const handleShare = () => {
-    const message = `나의 퍼스널컬러는 ${tone}! 컬러코치에서 나만의 색을 찾아보세요:`;
-    const url = window.location.href;
-    window.open(`https://wa.me/?text=${encodeURIComponent(message + ' ' + url)}`, '_blank');
+  const handleKakaoShare = () => {
+    const shareUrl = window.location.href;
+    const title = `나의 퍼스널 컬러는 [${tone}]!`;
+    const description = "컬러코치에서 나만의 인생 컬러와 찰떡 아이템을 확인해보세요.";
+
+    // Kakao SDK가 초기화되어 있고 키가 설정된 경우
+    if (window.Kakao && window.Kakao.isInitialized()) {
+      window.Kakao.Link.sendDefault({
+        objectType: 'feed',
+        content: {
+          title: title,
+          description: description,
+          imageUrl: 'https://cdn.pixabay.com/photo/2016/03/23/04/01/woman-1274056_1280.jpg', // 샘플 이미지
+          link: {
+            mobileWebUrl: shareUrl,
+            webUrl: shareUrl,
+          },
+        },
+        buttons: [
+          {
+            title: '나도 검사하기',
+            link: {
+              mobileWebUrl: shareUrl,
+              webUrl: shareUrl,
+            },
+          },
+        ],
+      });
+    } else {
+      // SDK 미초기화 시 커스텀 URL 스킴 사용 (기본 공유)
+      const kakaoUrl = `https://sharer.kakao.com/talk/friends/picker/link?url=${encodeURIComponent(shareUrl)}&title=${encodeURIComponent(title + "\n" + description)}`;
+      window.open(kakaoUrl, '_blank');
+    }
   };
 
   const handleReset = () => {
@@ -427,14 +470,14 @@ function App() {
                 </p>
               </div>
 
-              {/* Action Buttons */}
+              {/* Action Buttons - KakaoTalk Sharing */}
               <div className="flex flex-col gap-5 pt-4">
                 <button 
-                  onClick={handleShare} 
-                  className="w-full bg-[#25D366] text-white py-6 rounded-[2.5rem] font-bold text-xl shadow-2xl shadow-green-500/20 flex items-center justify-center gap-3 hover:brightness-105 active:scale-[0.98] transition-all"
+                  onClick={handleKakaoShare} 
+                  className="w-full bg-[#FEE500] text-[#191919] py-6 rounded-[2.5rem] font-bold text-xl shadow-xl shadow-yellow-500/10 flex items-center justify-center gap-3 hover:bg-[#FADA0A] active:scale-[0.98] transition-all"
                 >
-                  <Share2 className="w-6 h-6" />
-                  친구에게 내 컬러 공유
+                  <MessageCircle className="w-6 h-6 fill-current" />
+                  카카오톡으로 결과 공유
                 </button>
                 
                 <button 
