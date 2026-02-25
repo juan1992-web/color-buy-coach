@@ -1,5 +1,7 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import type { ChangeEvent } from 'react';
+import { supabase } from './lib/supabase';
+import type { Session } from '@supabase/supabase-js';
 import './App.css';
 
 type Step = 'landing' | 'upload' | 'analyzing' | 'result';
@@ -87,6 +89,25 @@ function App() {
   const [aiResult, setAiResult] = useState<AIResult | null>(null);
   const [recommendedProducts, setRecommendedProducts] = useState<Product[]>([]);
 
+  // Supabase Auth 상태 관리
+  const [session, setSession] = useState<Session | null>(null);
+  const [email, setEmail] = useState('');
+  const [isLoginLoading, setIsLoginLoading] = useState(false);
+
+  useEffect(() => {
+    // 세션 가져오기
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+    });
+
+    // 인증 상태 변경 리스너
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleStart = () => {
@@ -100,7 +121,27 @@ function App() {
       reader.onloadend = () => {
         setImagePreview(reader.result as string);
       };
-      reader.readAsDataURL(file); // Convert image to Base64
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // DB 저장 함수
+  const saveResultToDB = async (userId: string, tone: string, productsList: Product[]) => {
+    const { error } = await supabase
+      .from('results')
+      .insert([
+        {
+          user_id: userId,
+          tone: tone,
+          products: productsList, // JSON 형태로 저장됨
+          // image_url은 스토리지 업로드 전제로 보류하거나 제외
+        }
+      ]);
+      
+    if (error) {
+      console.error('결과 저장 중 오류 발생:', error);
+    } else {
+      console.log('결과가 성공적으로 저장되었습니다!');
     }
   };
 
@@ -108,7 +149,6 @@ function App() {
     setStep('analyzing');
     
     try {
-      // 1. Cloudflare Pages Function으로 POST 요청
       const response = await fetch('/api/analyze', {
         method: 'POST',
         headers: {
@@ -127,13 +167,18 @@ function App() {
       const result: AIResult = await response.json();
       setAiResult(result);
 
-      // 2. 결과에 따른 제품 추천 로직 (간단한 매핑)
       const toneLower = result.tone.toLowerCase();
       const isWarm = toneLower.includes('spring') || toneLower.includes('autumn') || toneLower.includes('warm');
       const mappedTone: Tone = isWarm ? 'warm' : 'cool';
       
-      setRecommendedProducts(products.filter(p => p.tone === mappedTone));
+      const matchedProducts = products.filter(p => p.tone === mappedTone);
+      setRecommendedProducts(matchedProducts);
       setStep('result');
+
+      // 로그인된 사용자라면 자동으로 DB에 저장
+      if (session?.user) {
+        await saveResultToDB(session.user.id, result.tone, matchedProducts);
+      }
 
     } catch (error) {
       console.error(error);
@@ -151,10 +196,50 @@ function App() {
     setRecommendedProducts([]);
   };
 
+  // 이메일 로그인(Magic Link) 함수
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email) return alert('이메일을 입력해주세요!');
+    
+    setIsLoginLoading(true);
+    const { error } = await supabase.auth.signInWithOtp({ email });
+    if (error) {
+      alert(error.message);
+    } else {
+      alert('로그인 링크가 포함된 이메일이 발송되었습니다. 확인 후 다시 돌아와주세요!');
+      // 로그인 완료(세션 생성) 후에 결과를 수동으로 한 번 더 저장할 수 있는 로직 등 추가 가능
+    }
+    setIsLoginLoading(false);
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+  };
+
   const isFormValid = imagePreview !== null && accessory !== '' && budget !== '';
 
   return (
-    <div className="app-container">
+    <div className="app-container relative">
+      
+      {/* 5. 로그인 상태 헤더 (결과 화면에서만 보이거나 항상 보이게) */}
+      {step !== 'landing' && (
+        <div className="absolute top-4 right-4 z-50 flex gap-2">
+          {session ? (
+            <>
+              <button className="px-3 py-1.5 text-xs font-bold text-gray-700 bg-white/80 backdrop-blur-md rounded-full border border-gray-200 shadow-sm hover:bg-gray-50 transition">
+                내 프로필
+              </button>
+              <button 
+                onClick={handleLogout}
+                className="px-3 py-1.5 text-xs font-bold text-pink-600 bg-white/80 backdrop-blur-md rounded-full border border-pink-100 shadow-sm hover:bg-pink-50 transition"
+              >
+                로그아웃
+              </button>
+            </>
+          ) : null}
+        </div>
+      )}
+
       {/* 1. 랜딩 페이지 */}
       {step === 'landing' && (
         <div className="main-container animate-fade-in-up">
@@ -321,10 +406,9 @@ function App() {
 
       {/* 4. 결과 화면 (Result) */}
       {step === 'result' && aiResult && (
-        <div className="w-full max-w-md flex flex-col gap-6 animate-fade-in-up pb-8">
+        <div className="w-full max-w-md flex flex-col gap-6 animate-fade-in-up pb-8 mt-12">
           
-          {/* 분석 완료 헤더 */}
-          <div className="text-center space-y-2 pt-4">
+          <div className="text-center space-y-2">
             <div className="inline-block bg-white/80 px-4 py-1.5 rounded-full shadow-sm border border-pink-100 mb-2">
               <span className="text-sm font-bold text-gray-700">
                 분석 완료! 고객님은 <span className="text-pink-500">{aiResult.tone}</span> 입니다.
@@ -343,7 +427,6 @@ function App() {
             </h2>
           </div>
 
-          {/* 추천 제품 리스트 */}
           <div className="space-y-4">
             {recommendedProducts.map((product, index) => (
               <div key={product.id} className="bg-white/80 backdrop-blur-md rounded-2xl p-4 shadow-sm border border-pink-100/50 flex gap-4 items-center relative overflow-hidden group hover:shadow-md transition-shadow">
@@ -370,14 +453,35 @@ function App() {
             ))}
           </div>
 
-          {/* 하단 액션 버튼 */}
           <div className="flex flex-col gap-3 mt-4">
+            {!session && (
+              <form onSubmit={handleLogin} className="flex flex-col gap-2 p-4 bg-white/60 backdrop-blur-md rounded-2xl border border-pink-100 shadow-sm">
+                <p className="text-sm font-bold text-gray-700 text-center mb-1">결과를 영구 보관하고 싶으신가요?</p>
+                <input 
+                  type="email" 
+                  placeholder="이메일 주소 입력" 
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-pink-300 transition"
+                  required
+                />
+                <button 
+                  type="submit" 
+                  disabled={isLoginLoading}
+                  className="w-full bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-600 hover:to-indigo-600 text-white font-bold py-3 rounded-xl shadow-md transition-all disabled:opacity-50"
+                >
+                  {isLoginLoading ? '전송 중...' : '이메일로 로그인하고 결과 저장하기'}
+                </button>
+              </form>
+            )}
+
             <button className="w-full bg-[#25D366] hover:bg-[#1EBE5C] text-white font-bold py-4 rounded-2xl shadow-md transition-all flex items-center justify-center gap-2">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
                 <path fillRule="evenodd" d="M1.5 4.5a3 3 0 013-3h1.372c.86 0 1.61.586 1.819 1.42l1.105 4.423a1.875 1.875 0 01-.694 1.955l-1.293.97c-.135.101-.164.249-.126.352a11.285 11.285 0 006.697 6.697c.103.038.25.009.352-.126l.97-1.293a1.875 1.875 0 011.955-.694l4.423 1.105c.834.209 1.42.959 1.42 1.82V19.5a3 3 0 01-3 3h-2.25C8.552 22.5 1.5 15.448 1.5 6.75V4.5z" clipRule="evenodd" />
               </svg>
               친구에게 물어보기 (WhatsApp)
             </button>
+            
             <button 
               onClick={handleReset}
               className="w-full bg-white text-gray-600 hover:text-gray-900 font-bold py-4 rounded-2xl border border-gray-200 transition-all shadow-sm"
