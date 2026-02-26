@@ -29,8 +29,15 @@ interface Product {
   brand: string;
   price: string;
   link: string;
+  image_url: string;
+  category: string;
+  tone_tag: string;
+}
+
+interface AnalysisResult {
+  tone: string;
   reason: string;
-  tags: string[];
+  bestColors: string[];
 }
 
 declare global {
@@ -50,42 +57,20 @@ function App() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [tone, setTone] = useState<string | null>(() => localStorage.getItem('savedTone') || null);
+  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(() => {
+    const saved = localStorage.getItem('savedAnalysis');
+    return saved ? JSON.parse(saved) : null;
+  });
+  const [recommendedProducts, setRecommendedProducts] = useState<Product[]>(() => {
+    const saved = localStorage.getItem('savedProducts');
+    return saved ? JSON.parse(saved) : [];
+  });
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const resultCardRef = useRef<HTMLDivElement>(null);
 
   // 카카오 JavaScript 키 (환경변수 또는 직접 입력)
   const KAKAO_KEY = import.meta.env.VITE_KAKAO_JS_KEY || ""; 
-
-  const products: Product[] = [
-    { 
-      id: 1, 
-      name: "매트 리퀴드 립스틱", 
-      brand: "A 브랜드", 
-      price: "₩32,000", 
-      link: "https://www.google.com/search?q=matte+lipstick", 
-      reason: "당신의 톤을 가장 화사하게 밝혀줄 컬러",
-      tags: ["베스트 매칭", "사랑스러운 무드"]
-    },
-    { 
-      id: 2, 
-      name: "소프트 벨벳 블러셔", 
-      brand: "B 브랜드", 
-      price: "₩28,000", 
-      link: "https://www.google.com/search?q=velvet+blusher", 
-      reason: "은은한 기품을 더해주는 우아한 발색",
-      tags: ["우아함", "기품 있는 선택"]
-    },
-    { 
-      id: 3, 
-      name: "데일리 실크 셔츠", 
-      brand: "C 브랜드", 
-      price: "₩49,000", 
-      link: "https://www.google.com/search?q=silk+shirt", 
-      reason: "피부결을 정돈해 보이는 화사한 아이보리",
-      tags: ["데일리 템", "품격 있는 연출"]
-    },
-  ];
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -110,35 +95,85 @@ function App() {
     return () => subscription.unsubscribe();
   }, [KAKAO_KEY]);
 
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = (error) => reject(error);
+    });
+  };
+
   const handleAnalyze = async () => {
     if (!selectedFile) return;
     
     setStep('analyzing');
     setLoading(true);
     
-    const messages = [
-      { text: "피부 결의 고유한 톤을 분석 중입니다...", progress: 20 },
-      { text: "주변 조명을 보정하여 정확도를 높이는 중입니다...", progress: 40 },
-      { text: "퍼스널 컬러 대비감을 세밀하게 측정 중입니다...", progress: 60 },
-      { text: "다양한 뷰티 브랜드 데이터와 매칭 중입니다...", progress: 80 },
-      { text: "당신만을 위한 베스트 컬러를 찾았습니다!", progress: 100 },
-    ];
+    try {
+      // 1. 이미지 Base64 변환
+      setAnalysisMessage("이미지를 분석 준비 중입니다...");
+      setAnalysisProgress(10);
+      const base64Image = await fileToBase64(selectedFile);
 
-    for (const msg of messages) {
-      setAnalysisMessage(msg.text);
-      setAnalysisProgress(msg.progress);
-      await new Promise(resolve => setTimeout(resolve, 800));
+      // 2. AI 분석 API 호출
+      setAnalysisMessage("AI가 퍼스널 컬러를 분석 중입니다...");
+      setAnalysisProgress(30);
+      
+      const response = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: base64Image }),
+      });
+
+      if (!response.ok) throw new Error('Analysis failed');
+      
+      const result: AnalysisResult = await response.json();
+      setAnalysisResult(result);
+      setTone(result.tone);
+      setAnalysisProgress(60);
+
+      // 3. Supabase에서 상품 가져오기
+      setAnalysisMessage("당신에게 어울리는 상품을 찾는 중입니다...");
+      setAnalysisProgress(80);
+
+      const categories = ['Lip', 'Cheek', 'Top'];
+      const fetchedProducts: Product[] = [];
+
+      for (const category of categories) {
+        const { data, error } = await supabase
+          .from('products')
+          .select('*')
+          .eq('tone_tag', result.tone)
+          .eq('category', category)
+          .limit(1)
+          .single();
+        
+        if (data) fetchedProducts.push(data);
+        else if (error) console.error(`Error fetching ${category}:`, error);
+      }
+
+      setRecommendedProducts(fetchedProducts);
+      setAnalysisProgress(100);
+      setAnalysisMessage("분석이 완료되었습니다!");
+      
+      // 로컬 스토리지 저장
+      localStorage.setItem('savedTone', result.tone);
+      localStorage.setItem('savedAnalysis', JSON.stringify(result));
+      localStorage.setItem('savedProducts', JSON.stringify(fetchedProducts));
+      localStorage.setItem('savedStep', 'result');
+
+      setTimeout(() => {
+        setStep('result');
+        setLoading(false);
+      }, 500);
+
+    } catch (error) {
+      console.error('Analysis error:', error);
+      alert('분석 중 오류가 발생했습니다. 다시 시도해주세요.');
+      setStep('upload');
+      setLoading(false);
     }
-
-    const mockTones = ['가을 웜톤 (Warm Autumn)', '여름 쿨톤 (Cool Summer)', '겨울 쿨톤 (Cool Winter)', '봄 웜톤 (Warm Spring)'];
-    const randomTone = mockTones[Math.floor(Math.random() * mockTones.length)];
-    
-    setTone(randomTone);
-    setLoading(false);
-    setStep('result');
-    
-    localStorage.setItem('savedTone', randomTone);
-    localStorage.setItem('savedStep', 'result');
   };
 
   const handleSaveAsImage = async () => {
@@ -207,8 +242,12 @@ function App() {
   const handleReset = () => {
     localStorage.removeItem('savedTone');
     localStorage.removeItem('savedStep');
+    localStorage.removeItem('savedAnalysis');
+    localStorage.removeItem('savedProducts');
     setStep('landing');
     setTone(null);
+    setAnalysisResult(null);
+    setRecommendedProducts([]);
     setPreview(null);
     setSelectedFile(null);
   };
@@ -439,16 +478,46 @@ function App() {
                   </div>
                 </div>
 
+                {analysisResult && (
+                  <div className="mt-8 p-6 bg-beauty-light/20 rounded-3xl border border-beauty-pink/5">
+                    <h4 className="font-bold text-beauty-pink mb-2 flex items-center gap-2">
+                      <Sparkles className="w-4 h-4" /> 전문가의 조언
+                    </h4>
+                    <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">
+                      {analysisResult.reason}
+                    </p>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {analysisResult.bestColors.map((color, i) => (
+                        <span key={i} className="px-3 py-1 bg-white rounded-full text-xs font-bold text-gray-500 border border-gray-100 shadow-sm">
+                          #{color}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div className="mt-8 space-y-4">
                    <p className="text-center text-xs font-bold text-gray-400 uppercase tracking-widest">Recommended Items</p>
                    <div className="grid grid-cols-3 gap-3">
-                      {products.map(p => (
-                        <div key={p.id} className="flex flex-col items-center text-center gap-1.5">
-                           <div className="w-full aspect-square bg-beauty-light rounded-2xl flex items-center justify-center border border-beauty-pink/5">
-                              <ShoppingBag className="w-8 h-8 text-beauty-pink/30" />
+                      {recommendedProducts.map(p => (
+                        <a 
+                          key={p.id} 
+                          href={p.link} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="flex flex-col items-center text-center gap-1.5 group cursor-pointer"
+                        >
+                           <div className="w-full aspect-square bg-beauty-light rounded-2xl flex items-center justify-center border border-beauty-pink/5 overflow-hidden transition-transform group-hover:scale-105">
+                              {p.image_url ? (
+                                <img src={p.image_url} alt={p.name} className="w-full h-full object-cover" />
+                              ) : (
+                                <ShoppingBag className="w-8 h-8 text-beauty-pink/30" />
+                              )}
                            </div>
-                           <p className="text-[10px] font-bold text-gray-700 leading-tight line-clamp-1">{p.name}</p>
-                        </div>
+                           <p className="text-[10px] font-bold text-gray-500 uppercase tracking-tighter">{p.brand}</p>
+                           <p className="text-[10px] font-bold text-gray-800 leading-tight line-clamp-1 h-3">{p.name}</p>
+                           <p className="text-[10px] font-medium text-beauty-pink">{p.price}</p>
+                        </a>
                       ))}
                    </div>
                 </div>

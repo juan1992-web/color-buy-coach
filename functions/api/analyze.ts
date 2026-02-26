@@ -26,12 +26,12 @@ export async function onRequestPost(context) {
     // image는 "data:image/jpeg;base64,/9j/4AAQ..." 형태라고 가정
     const systemPrompt = `
       You are an expert personal color analyst. 
-      Analyze the user's personal color (Spring/Summer/Autumn/Winter) and skin brightness (Light/Deep) based on the provided image and information.
+      Analyze the user's personal color tone (e.g., Warm Spring, Cool Spring, Bright Spring, Cool Summer, Light Summer, Muted Summer, Warm Autumn, Deep Autumn, Muted Autumn, Cool Winter, Deep Winter, Bright Winter) based on the provided image and information.
       User's preferred accessory color: ${preferences?.accessory || 'Unknown'}.
       
       Respond STRICTLY in the following JSON format:
       {
-        "tone": "Spring | Summer | Autumn | Winter",
+        "tone": "Specific Tone (e.g., Warm Spring)",
         "reason": "Detailed reason for the analysis in Korean",
         "bestColors": ["color1", "color2", "color3"]
       }
@@ -55,7 +55,7 @@ export async function onRequestPost(context) {
             content: [
               {
                 type: "text",
-                text: "이 사람의 퍼스널컬러(Spring/Summer/Autumn/Winter)와 피부 밝기(Light/Deep)를 분석해줘. JSON으로 { tone: string, reason: string, bestColors: string[] } 형식으로 답해줘."
+                text: "이 사람의 퍼스널컬러 톤(예: Warm Spring, Cool Summer 등)을 정밀하게 분석해줘. JSON으로 { tone: string, reason: string, bestColors: string[] } 형식으로 답해줘."
               },
               {
                 type: "image_url",
