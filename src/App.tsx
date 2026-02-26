@@ -104,6 +104,37 @@ function App() {
     });
   };
 
+  const compressImage = (base64Str: string): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.src = base64Str;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 800;
+        const MAX_HEIGHT = 800;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', 0.7));
+      };
+    });
+  };
+
   const handleAnalyze = async () => {
     if (!selectedFile) return;
     
@@ -111,10 +142,11 @@ function App() {
     setLoading(true);
     
     try {
-      // 1. 이미지 Base64 변환
+      // 1. 이미지 Base64 변환 및 압축
       setAnalysisMessage("이미지를 분석 준비 중입니다...");
       setAnalysisProgress(10);
-      const base64Image = await fileToBase64(selectedFile);
+      const originalBase64 = await fileToBase64(selectedFile);
+      const base64Image = await compressImage(originalBase64);
 
       // 2. AI 분석 API 호출
       setAnalysisMessage("AI가 퍼스널 컬러를 분석 중입니다...");
@@ -126,7 +158,10 @@ function App() {
         body: JSON.stringify({ image: base64Image }),
       });
 
-      if (!response.ok) throw new Error('Analysis failed');
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Analysis failed: ${response.status} ${errorText}`);
+      }
       
       const result: AnalysisResult = await response.json();
       setAnalysisResult(result);

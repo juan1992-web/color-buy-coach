@@ -29,7 +29,7 @@
       enable = true;
       previews = {
         web = {
-          command = ["npm" "run" "dev" "--" "--port" "$PORT" "--host" "0.0.0.0"];
+          command = ["bash" "-c" "npx wrangler pages dev . --port 8788 --compatibility-date=2024-04-03 --live-reload false & npm run dev -- --port $PORT --host 0.0.0.0"];
           manager = "web";
         };
       };

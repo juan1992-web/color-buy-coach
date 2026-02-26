@@ -82,20 +82,31 @@ export async function onRequestPost(context) {
 
     // 3. OpenAI 응답 파싱 및 반환
     const aiData = await openAiResponse.json();
+    
+    if (!aiData.choices || !aiData.choices[0] || !aiData.choices[0].message) {
+      console.error('Invalid OpenAI response structure:', aiData);
+      return new Response(JSON.stringify({ error: 'Invalid response from AI' }), {
+        status: 502,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
     const resultContent = aiData.choices[0].message.content;
     const parsedResult = JSON.parse(resultContent);
 
     return new Response(JSON.stringify(parsedResult), {
       status: 200,
       headers: { 
-        'Content-Type': 'application/json',
-        // 'Access-Control-Allow-Origin': '*' // 필요한 경우 CORS 설정 추가
+        'Content-Type': 'application/json'
       },
     });
 
   } catch (error) {
     console.error('Error in analyze function:', error);
-    return new Response(JSON.stringify({ error: 'Internal Server Error' }), {
+    return new Response(JSON.stringify({ 
+      error: 'Internal Server Error',
+      message: error instanceof Error ? error.message : String(error)
+    }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     });
