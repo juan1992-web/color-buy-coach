@@ -141,16 +141,26 @@ function App() {
       const fetchedProducts: Product[] = [];
 
       for (const category of categories) {
-        const { data, error } = await supabase
-          .from('products')
-          .select('*')
-          .eq('tone_tag', result.tone)
-          .eq('category', category)
-          .limit(1)
-          .single();
-        
-        if (data) fetchedProducts.push(data);
-        else if (error) console.error(`Error fetching ${category}:`, error);
+        try {
+          const { data, error } = await supabase
+            .from('products')
+            .select('*')
+            .eq('tone_tag', result.tone)
+            .eq('category', category)
+            .limit(1)
+            .maybeSingle(); // single() 대신 maybeSingle() 사용 (데이터가 없어도 에러 아님)
+          
+          if (error) {
+            console.error(`Supabase error fetching ${category}:`, error.message, error.hint);
+            // 만약 테이블이 없는 에러(PGRST205)라면 사용자에게 안내가 필요할 수 있음
+          }
+
+          if (data) {
+            fetchedProducts.push(data);
+          }
+        } catch (err) {
+          console.error(`Unexpected error fetching ${category}:`, err);
+        }
       }
 
       setRecommendedProducts(fetchedProducts);
